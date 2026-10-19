@@ -1,0 +1,18 @@
+# Extracted/decompiled vendor code — never commit (third-party proprietary)
+work/
+extracted/
+*.asar
+*.dmg
+*.app/
+# Raw REA output may embed vendor source; only curated notes go in notes/
+rea-out/
+# Secrets / env
+.env*
+*.key
+*.pem
+*.token
+# OS / editor
+.DS_Store
+node_modules/
+.idea/
+.vscode/
