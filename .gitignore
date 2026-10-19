@@ -16,3 +16,4 @@ rea-out/
 node_modules/
 .idea/
 .vscode/
+tools/node_modules/
