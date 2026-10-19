@@ -1,4 +1,4 @@
-# 01 - Audio capture, encoding and packetization (Wispr Flow 1.6.1102)
+# 01 - Audio capture, encoding and packetization (the subject app 1.6.1102)
 
 Scope: microphone -> PCM/Opus packets, up to the point where packets are handed to the network transport.
 Citations are `path:line` relative to `work/pretty/`. `hub` = `renderer/hub/index.js`, `main` = `main/index.js`.

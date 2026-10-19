@@ -1,0 +1,102 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pill waveform prototype</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;min-height:100vh;background:#2b2f36;display:grid;place-items:center;font:14px system-ui;color:#ddd}
+  main{display:grid;gap:20px;justify-items:center}
+  /* pill: bottom-dock sizes from docs/04 */
+  #pill{display:flex;align-items:center;justify-content:center;background:#000;border:1px solid #333;border-radius:22.5px;
+        height:30px;width:73px;transition:all .1s cubic-bezier(.05,.6,.4,.95);overflow:visible}
+  #pill[data-s=resting]{width:40px;height:8px;border-radius:6px;background:rgba(0,0,0,.5);border-color:rgba(255,255,255,.5)}
+  #pill[data-s=ready]{width:50px}
+  #pill[data-s=popo]{width:102.5px}
+  #pill[data-s=processing]{width:98px}
+  #pill[data-s=error]{width:91px;border:1.5px solid #e5484d}
+  #wave{display:flex;align-items:center;gap:2px;padding:8px 4px;height:2px}
+  #pill[data-s=resting] #wave{opacity:0}
+  .bar{width:2px;min-height:2px;border-radius:.5px;background:rgba(255,255,255,.4);transform-origin:center;will-change:transform}
+  .mic .bar{background:#fff}
+  .anim .bar{animation:wobble 1s infinite ease-in-out}
+  /* vendor keyframes: x1, x1.2, x1.5, x1.1, x1.3 at 0/20/40/80/90% (own re-expression via --w) */
+  @keyframes wobble{0%,100%{--w:1}20%{--w:1.2}40%{--w:1.5}80%{--w:1.1}90%{--w:1.3}}
+  @property --w{syntax:"<number>";inherits:false;initial-value:1}
+  .bar{transform:scaleY(calc(var(--s,1) * var(--h,1) * var(--w,1)))}
+  .spin{position:relative;width:16px;height:16px;display:none;margin-left:8px}
+  #pill[data-s=processing] .spin{display:block}
+  .spoke{position:absolute;left:7px;top:5px;width:2px;height:5px;border-radius:1px;background:rgba(163,148,199,.3);animation:fade 1.1s linear infinite}
+  @keyframes fade{0%{background:rgba(163,148,199,.88)}100%{background:rgba(163,148,199,.15)}}
+  fieldset{border:1px solid #555;padding:8px 12px}
+  label{display:block;margin:4px 0}
+  code{color:#9cf}
+</style>
+<main>
+  <div id="pill" data-s="ptt"><div id="wave"></div><div class="spin" id="spin"></div></div>
+  <fieldset>
+    <legend>input</legend>
+    <label>state
+      <select id="state"><option>resting<option>ready<option selected>ptt<option>popo<option>processing<option>error</select></label>
+    <label>mic source
+      <select id="src"><option value="synth">synthetic speech (dB)<option value="slider">slider</select></label>
+    <label>slider dB (-60..-10) <input id="db" type="range" min="-60" max="-10" value="-40"></label>
+    <label><input id="mic" type="checkbox" checked> mic active (white bars)</label>
+    <div>raw level <code id="rl">0</code> | smoothed <code id="sl">0</code> | audio-scale <code id="sc">1</code></div>
+  </fieldset>
+</main>
+<script>
+// ---- constants from docs/04 ----
+const BARS = 10, BULGE = 1;           // default bar count / bulge coefficient
+const GAIN = 5;                        // audio-scale = max(1, GAIN * smoothedLevel)
+const ALPHA = 0.85;                    // per-frame smoothing weight on previous value
+const SEND_MS = 150;                   // main process averages chunks over 150 ms
+const SCALER_FLOOR_MIN = -60, SCALER_RANGE = 20; // dB
+const $ = (id) => document.getElementById(id);
+
+// adaptive-floor scaler: floor only ratchets down (reset at dictation start to 0)
+function makeScaler(min = SCALER_FLOOR_MIN, range = SCALER_RANGE){
+  let floor = 0;
+  return { scale(db){ if (db < floor) floor = Math.max(min, db); return Math.max(0, Math.min(1, (db - floor)/range)); },
+           reset(){ floor = 0; } };
+}
+// build bars: static center weighting + per-bar animation phase
+const wave = $("wave"), bars = [];
+const half = Math.ceil(BARS/2);
+for (let i=0;i<BARS;i++){
+  const d = Math.abs((BARS-1)/2 - i);
+  const h = BULGE >= 2 ? Math.max(0, 1 - d*(BULGE/48)) : Math.max(0, 1 - d*d*(BULGE/48));
+  const off = i < half ? i : i - BARS;
+  const el = document.createElement("div"); el.className = "bar";
+  el.style.setProperty("--h", h); el.style.animationDelay = (0.1*off)+"s";
+  wave.appendChild(el); bars.push(el);
+}
+for (let i=0;i<8;i++){ const s=document.createElement("div"); s.className="spoke";
+  s.style.transform=`rotate(${45*i}deg) translate(0,-6px)`; s.style.animationDelay=(0.1375*-(7-i))+"s"; $("spin").appendChild(s); }
+
+const scaler = makeScaler();
+let pending = [], smoothed = 0, target = 0, t0 = performance.now();
+function fakeDb(t){ // syllable-like envelope, -55..-20 dB
+  const env = Math.max(0, Math.sin(t*5.3))*Math.max(0, Math.sin(t*1.1+1));
+  return -55 + 35*env + (Math.random()-.5)*3;
+}
+// "main process": every ~16ms chunk arrives; every 150 ms send the mean of scaled values
+setInterval(()=>{ const t=(performance.now()-t0)/1000;
+  const db = $("src").value==="synth" ? fakeDb(t) : +$("db").value;
+  pending.push(scaler.scale(db)); }, 16);
+setInterval(()=>{ if(!pending.length) return; target = pending.reduce((a,b)=>a+b,0)/pending.length; pending=[]; }, SEND_MS);
+
+function frame(){
+  const st = $("state").value;
+  const live = st==="ptt" || st==="popo";
+  smoothed = Math.floor(100*(ALPHA*smoothed + (1-ALPHA)*(live? target:0)))/100;
+  const scale = Math.max(1, GAIN*smoothed);
+  wave.style.setProperty("--s", scale);
+  wave.parentElement.dataset.s = st;
+  wave.classList.toggle("anim", live && $("mic").checked && target>0);
+  wave.classList.toggle("mic", live && $("mic").checked);
+  $("rl").textContent = target.toFixed(2); $("sl").textContent = smoothed.toFixed(2); $("sc").textContent = scale.toFixed(2);
+  requestAnimationFrame(frame);
+}
+$("state").addEventListener("change", ()=>{ scaler.reset(); });
+requestAnimationFrame(frame);
+</script>

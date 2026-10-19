@@ -17,3 +17,6 @@ node_modules/
 .idea/
 .vscode/
 tools/node_modules/
+
+# Brand-scrub rules (contain the vendor name; must never be committed)
+.brandrules

@@ -2,13 +2,14 @@
 // extract-proto.mjs reads the reflection field lists; this script instead reads every
 // `writer.tag(N, WireType.X)` call inside each message's internalBinaryWrite, an
 // independent code path, and checks field numbers + wire types agree.
-// Usage: node verify-proto-wire.mjs <bundle.js> <file.proto>   (exit 1 on mismatch)
+// Usage: node verify-proto-wire.mjs <bundle.js> <file.proto> <pkg.prefix.>   (exit 1 on mismatch)
 import fs from "node:fs";
 import { parse } from "@babel/parser";
 import traverseMod from "@babel/traverse";
 const traverse = traverseMod.default;
 
-const [bundle, protoFile] = process.argv.slice(2);
+const [bundle, protoFile, prefix] = process.argv.slice(2);
+if (!prefix) { console.error("usage: verify-proto-wire.mjs <bundle.js> <file.proto> <pkg.prefix.>"); process.exit(2); }
 const ast = parse(fs.readFileSync(bundle, "utf8"), { sourceType: "script", errorRecovery: true });
 
 // 1. Observed: typeName -> Map(fieldNo -> wireTypeName) from internalBinaryWrite bodies.
@@ -20,7 +21,7 @@ traverse(ast, {
     p.traverse({ CallExpression(c) {
       if (c.node.callee.type === "Super" && c.node.arguments[0]?.type === "StringLiteral") typeName = c.node.arguments[0].value;
     } });
-    if (!typeName?.startsWith("flow_api.v1.")) return;
+    if (!typeName?.startsWith(prefix)) return;
     const write = p.parentPath.get("body").find((m) => m.node.key?.name === "internalBinaryWrite");
     const tags = new Map();
     write?.traverse({ CallExpression(c) {
@@ -28,7 +29,7 @@ traverse(ast, {
       if (callee.property?.name === "tag" && no?.type === "NumericLiteral" && wt?.type === "MemberExpression")
         tags.set(no.value, wt.property.name);
     } });
-    observed.set(typeName.slice("flow_api.v1.".length), tags);
+    observed.set(typeName.slice(prefix.length), tags);
   },
 });
 

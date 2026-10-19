@@ -1,5 +1,5 @@
 // Reconstruct .proto definitions from a protobuf-ts webpack bundle.
-// Usage: node extract-proto.mjs <bundle.js> [packagePrefix] > out.proto
+// Usage: node extract-proto.mjs <bundle.js> <pkg.prefix.> > out.proto
 // Finds `class extends MessageType { constructor(){ super("pkg.Name", [fields]) } }`
 // and `new ServiceType("pkg.Svc", [methods])`, resolving T: () => ident via scope.
 import fs from "node:fs";
@@ -7,7 +7,8 @@ import { parse } from "@babel/parser";
 import traverseMod from "@babel/traverse";
 const traverse = traverseMod.default;
 
-const [file, prefix = "flow_api.v1."] = process.argv.slice(2);
+const [file, prefix] = process.argv.slice(2);
+if (!file || !prefix) { console.error("usage: extract-proto.mjs <bundle.js> <pkg.prefix.>"); process.exit(2); }
 const ast = parse(fs.readFileSync(file, "utf8"), { sourceType: "script", errorRecovery: true });
 
 const SCALAR = { 1: "double", 2: "float", 3: "int64", 4: "uint64", 5: "int32", 6: "fixed64", 7: "fixed32",

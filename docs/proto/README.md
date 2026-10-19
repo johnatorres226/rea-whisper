@@ -1,6 +1,6 @@
 # `flow_api.v1`: reconstructed dictation wire protocol
 
-`flow_api_v1.proto` is the gRPC/protobuf contract the Wispr Flow desktop client (v1.6.1102) uses to talk to its transcription + formatting backend. It was **not** shipped as a `.proto`. It was rebuilt from the protobuf-ts reflection metadata compiled into the main-process bundle (`.webpack/main/index.js`).
+`flow_api_v1.proto` is the gRPC/protobuf contract the subject app desktop client (v1.6.1102) uses to talk to its transcription + formatting backend. It was **not** shipped as a `.proto`. It was rebuilt from the protobuf-ts reflection metadata compiled into the main-process bundle (`.webpack/main/index.js`).
 
 ## How to regenerate
 
